@@ -17,7 +17,7 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// packages/gamecore/src/index.ts
+// src/index.ts
 var src_exports = {};
 __export(src_exports, {
   DEFAULT_MAX_FRAMES: () => DEFAULT_MAX_FRAMES,
@@ -39,7 +39,7 @@ __export(src_exports, {
 });
 module.exports = __toCommonJS(src_exports);
 
-// packages/gamecore/src/vec2.ts
+// src/vec2.ts
 var UNIT = 1e3;
 function tile(x, y) {
   return { x: x * UNIT, y: y * UNIT };
@@ -89,7 +89,7 @@ function isqrt(n) {
   return x;
 }
 
-// packages/gamecore/src/rng.ts
+// src/rng.ts
 var GOLDEN_GAMMA = 0x9e3779b97f4a7c15n;
 var MIX1 = 0xbf58476d1ce4e5b9n;
 var MIX2 = 0x94d049bb133111ebn;
@@ -131,7 +131,7 @@ var RNG = class {
   }
 };
 
-// packages/gamecore/src/replay.ts
+// src/replay.ts
 function toOutcomeJSON(outcome) {
   const json = { over: outcome.over };
   if (outcome.passed) {
@@ -164,7 +164,7 @@ function toReplayJSON(replay) {
   };
 }
 
-// packages/gamecore/src/frame-driver.ts
+// src/frame-driver.ts
 var DEFAULT_MAX_FRAMES = 3600;
 function withMaxFrames(n) {
   return (config) => {
@@ -287,4 +287,4 @@ var FrameDriver = class {
   withDecisionInterval,
   withMaxFrames
 });
-//# sourceMappingURL=gamecore.cjs.map
+//# sourceMappingURL=index.cjs.map

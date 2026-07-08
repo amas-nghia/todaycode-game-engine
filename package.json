@@ -1,18 +1,14 @@
 {
   "name": "todaycode-game-engine",
-  "version": "0.1.0",
-  "description": "Shared, deterministic game engine (gamecore + Farm Wars rules) consumed by todaycode-be and CodeClash-fe. Install as a git dependency and import by subpath.",
+  "version": "0.2.0",
+  "description": "Game-agnostic, deterministic engine base (Engine contract, FrameDriver, seeded RNG, integer vec2, replay envelope). Games implement this contract in their own repos.",
   "license": "UNLICENSED",
   "type": "module",
   "files": ["dist"],
   "exports": {
-    "./gamecore": {
-      "import": { "types": "./dist/gamecore.d.ts", "default": "./dist/gamecore.js" },
-      "require": { "types": "./dist/gamecore.d.cts", "default": "./dist/gamecore.cjs" }
-    },
-    "./farmwars": {
-      "import": { "types": "./dist/farmwars.d.ts", "default": "./dist/farmwars.js" },
-      "require": { "types": "./dist/farmwars.d.cts", "default": "./dist/farmwars.cjs" }
+    ".": {
+      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
     }
   },
   "scripts": {
