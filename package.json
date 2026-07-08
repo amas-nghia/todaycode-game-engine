@@ -1,0 +1,38 @@
+{
+  "name": "todaycode-game-engine",
+  "version": "0.1.0",
+  "description": "Shared, deterministic game engine (gamecore + Farm Wars rules) consumed by todaycode-be and CodeClash-fe. Install as a git dependency and import by subpath.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "files": ["dist"],
+  "exports": {
+    "./gamecore": {
+      "import": { "types": "./dist/gamecore.d.ts", "default": "./dist/gamecore.js" },
+      "require": { "types": "./dist/gamecore.d.cts", "default": "./dist/gamecore.cjs" }
+    },
+    "./farmwars": {
+      "import": { "types": "./dist/farmwars.d.ts", "default": "./dist/farmwars.js" },
+      "require": { "types": "./dist/farmwars.d.cts", "default": "./dist/farmwars.cjs" }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "jest",
+    "lint": "tsc -b --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.0.0",
+    "jest": "^30.0.0",
+    "ts-jest": "^29.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": ["**/__tests__/**/*.spec.ts"],
+    "moduleFileExtensions": ["ts", "js", "json"]
+  }
+}
