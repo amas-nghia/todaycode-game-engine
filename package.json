@@ -1,10 +1,13 @@
 {
   "name": "todaycode-game-engine",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Game-agnostic, deterministic engine base (Engine contract, FrameDriver, seeded RNG, integer vec2, replay envelope). Games implement this contract in their own repos.",
   "license": "UNLICENSED",
   "type": "module",
   "files": ["dist"],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.cts",
   "exports": {
     ".": {
       "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
