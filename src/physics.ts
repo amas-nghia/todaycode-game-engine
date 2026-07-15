@@ -1,6 +1,6 @@
 import { WorldState } from './world';
 import { getComponent, EntityId } from './entity';
-import { PositionComponent, BlockingComponent, CollisionComponent } from './components';
+import { PositionComponent, BlockingComponent, CollisionComponent, HealthComponent } from './components';
 
 export function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
   return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
@@ -24,8 +24,12 @@ export function getBlockingEntities(world: WorldState): Array<{ id: EntityId; x:
     const block = getComponent<BlockingComponent>(entity, 'blocking');
     const pos = getComponent<PositionComponent>(entity, 'position');
     const col = getComponent<CollisionComponent>(entity, 'collision');
+    const health = getComponent<HealthComponent>(entity, 'health');
     
     if (block?.blocksMovement && pos && col) {
+      if (health && health.current <= 0) {
+        continue; // Dead entities don't block movement
+      }
       blockers.push({
         id,
         x: pos.x,

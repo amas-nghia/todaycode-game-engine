@@ -704,7 +704,11 @@ function getBlockingEntities(world) {
     const block = getComponent(entity, "blocking");
     const pos = getComponent(entity, "position");
     const col = getComponent(entity, "collision");
+    const health = getComponent(entity, "health");
     if (block?.blocksMovement && pos && col) {
+      if (health && health.current <= 0) {
+        continue;
+      }
       blockers.push({
         id,
         x: pos.x,
