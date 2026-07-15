@@ -112,7 +112,9 @@ describe('FrameDriver', () => {
     expect(replay.outcome.passed).toBe(true);
     expect(replay.outcome.stars).toBe(3);
     expect(replay.frameCount).toBeGreaterThan(0);
-    expect(replay.frames.length).toBeGreaterThan(0);
+    const frames = replay.frames;
+    expect(frames).toBeDefined();
+    expect(frames!.length).toBeGreaterThan(0);
     expect(replay.engine).toBe('walk-test');
     expect(replay.engineVersion).toBe('1.0.0');
   });

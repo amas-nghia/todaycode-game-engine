@@ -54,7 +54,7 @@ export interface Replay {
   levelVersion: number;
   seed: number;
   frameCount: number;
-  frames: FrameEvents[];
+  frames?: FrameEvents[];
   worldFrames?: WorldFrame[];
   outcome: Outcome;
   schemaVersion?: number;
@@ -102,9 +102,12 @@ export function toReplayJSON(replay: Replay): Record<string, unknown> {
     levelVersion: replay.levelVersion,
     seed: replay.seed,
     frameCount: replay.frameCount,
-    frames: replay.frames.map((f) => ({ frame: f.frame, events: f.events })),
     outcome: toOutcomeJSON(replay.outcome),
   };
+
+  if (replay.frames) {
+    json.frames = replay.frames.map((f) => ({ frame: f.frame, events: f.events }));
+  }
 
   if (replay.worldFrames) {
     json.worldFrames = replay.worldFrames.map(wf => ({

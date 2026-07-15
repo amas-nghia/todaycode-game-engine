@@ -35,12 +35,11 @@ export interface ReplayMetadata {
 export function buildReplay(result: WorldRunnerResult, metadata: ReplayMetadata = {}): Replay {
   return {
     engine: metadata.engine || 'todaycode-game-engine',
-    engineVersion: metadata.engineVersion || '0.2.4',
+    engineVersion: metadata.engineVersion || '0.2.6',
     levelSlug: metadata.levelSlug || 'unknown',
     levelVersion: metadata.levelVersion || 1,
     seed: metadata.seed || 0,
     frameCount: result.frames,
-    frames: result.worldFrames.map(wf => ({ frame: wf.frame, events: wf.events })),
     worldFrames: result.worldFrames,
     outcome: {
       over: true,

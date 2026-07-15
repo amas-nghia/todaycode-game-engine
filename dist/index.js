@@ -170,9 +170,11 @@ function toReplayJSON(replay) {
     levelVersion: replay.levelVersion,
     seed: replay.seed,
     frameCount: replay.frameCount,
-    frames: replay.frames.map((f) => ({ frame: f.frame, events: f.events })),
     outcome: toOutcomeJSON(replay.outcome)
   };
+  if (replay.frames) {
+    json.frames = replay.frames.map((f) => ({ frame: f.frame, events: f.events }));
+  }
   if (replay.worldFrames) {
     json.worldFrames = replay.worldFrames.map((wf) => ({
       frame: wf.frame,
@@ -861,61 +863,86 @@ var MovementSystem = class {
 };
 
 // src/actions/handlers.ts
+function movePoint(position, direction, distanceToMove) {
+  const target = { x: position.x, y: position.y };
+  if (direction === "up") target.y += distanceToMove;
+  else if (direction === "down") target.y -= distanceToMove;
+  else if (direction === "left") target.x -= distanceToMove;
+  else if (direction === "right") target.x += distanceToMove;
+  return target;
+}
 var MoveDirectionHandler = class {
   type = "MOVE_DIRECTION";
   validate(ctx, action) {
     const actor = ctx.world.entities[action.actorId];
     if (!actor) return { valid: false, reason: "Actor not found" };
+    if (!action.payload) return { valid: false, reason: "Missing move payload" };
     const pos = getComponent(actor, "position");
     if (!pos) return { valid: false, reason: "Actor has no position" };
     const mov = getComponent(actor, "movement");
     if (!mov) return { valid: false, reason: "Actor has no movement component" };
+    if (action.payload?.distance !== void 0 && action.payload.distance <= 0) {
+      return { valid: false, reason: "Distance must be > 0" };
+    }
     return { valid: true };
   }
   start(ctx, action) {
     const actor = ctx.world.entities[action.actorId];
     const pos = getComponent(actor, "position");
     const mov = getComponent(actor, "movement");
-    const target = { x: pos.x, y: pos.y };
     const dir = action.payload.direction;
-    if (dir === "up") target.y += mov.stepDistance;
-    else if (dir === "down") target.y -= mov.stepDistance;
-    else if (dir === "left") target.x -= mov.stepDistance;
-    else if (dir === "right") target.x += mov.stepDistance;
-    if (!isPositionInBounds(ctx.world, target)) {
-      return { localState: { blocked: true, target, reason: "Target out of bounds" } };
-    }
+    let remainingDistance = action.payload.distance ?? mov.stepDistance;
     const actorRadius = actor.components.collision ? actor.components.collision.radius : 0;
-    if (!isSegmentClear(ctx.world, pos, target, action.actorId, actorRadius)) {
-      return { localState: { blocked: true, target, reason: "Path blocked" } };
+    let target = { x: pos.x, y: pos.y };
+    let blockedTo;
+    let blockedReason;
+    while (remainingDistance > 0) {
+      const segmentDistance = Math.min(mov.stepDistance, remainingDistance);
+      const nextTarget = movePoint(target, dir, segmentDistance);
+      if (!isPositionInBounds(ctx.world, nextTarget)) {
+        blockedTo = nextTarget;
+        blockedReason = "Target out of bounds";
+        break;
+      }
+      if (!isSegmentClear(ctx.world, target, nextTarget, action.actorId, actorRadius)) {
+        blockedTo = nextTarget;
+        blockedReason = "Path blocked";
+        break;
+      }
+      target = nextTarget;
+      remainingDistance -= segmentDistance;
+    }
+    if (target.x === pos.x && target.y === pos.y && blockedTo) {
+      return { localState: { blocked: true, target: blockedTo, blockedTo, reason: blockedReason } };
     }
     setComponent(actor, "motion", {
       from: { x: pos.x, y: pos.y },
       target,
       remainingDistance: distance(pos, target)
     });
-    return { localState: { target } };
+    return {
+      localState: blockedTo ? { blocked: true, target, blockedTo, reason: blockedReason } : { target }
+    };
   }
   step(ctx, state) {
-    if (state.localState?.blocked) {
-      const actor2 = ctx.world.entities[state.action.actorId];
-      const pos = getComponent(actor2, "position");
+    const actor = ctx.world.entities[state.action.actorId];
+    if (state.localState?.blocked && (!actor || !hasComponent(actor, "motion"))) {
+      const pos = actor ? getComponent(actor, "position") : void 0;
       return {
         status: "done",
         events: [{
           type: "move_blocked",
           frame: ctx.frame,
           actorId: state.action.actorId,
-          from: { x: pos.x, y: pos.y },
-          to: state.localState.target
+          from: pos ? { x: pos.x, y: pos.y } : { x: 0, y: 0 },
+          to: state.localState.blockedTo ?? state.localState.target
         }]
       };
     }
-    const actor = ctx.world.entities[state.action.actorId];
-    if (!hasComponent(actor, "motion")) {
+    if (!actor || !hasComponent(actor, "motion")) {
       return { status: "done", events: [] };
     }
-    return { status: "running", events: [] };
+    return { status: "running", events: [], localState: state.localState };
   }
 };
 var WaitHandler = class {
@@ -1037,12 +1064,11 @@ var PickUpHandler = class {
 function buildReplay(result, metadata = {}) {
   return {
     engine: metadata.engine || "todaycode-game-engine",
-    engineVersion: metadata.engineVersion || "0.2.4",
+    engineVersion: metadata.engineVersion || "0.2.6",
     levelSlug: metadata.levelSlug || "unknown",
     levelVersion: metadata.levelVersion || 1,
     seed: metadata.seed || 0,
     frameCount: result.frames,
-    frames: result.worldFrames.map((wf) => ({ frame: wf.frame, events: wf.events })),
     worldFrames: result.worldFrames,
     outcome: {
       over: true,
@@ -1178,6 +1204,101 @@ var WorldRunner = class {
     };
   }
 };
+
+// src/live-world-session.ts
+var LiveWorldSession = class {
+  constructor(world, systems, actions, objectives, options = {}) {
+    this.world = world;
+    this.systems = systems;
+    this.actions = actions;
+    this.objectives = objectives;
+    this.options = options;
+    this.worldFrames.push(captureWorldFrame(this.world, this.world.frame, []));
+    if (this.options.winCondition && this.objectives.evaluate(this.world, this.options.winCondition)) {
+      this.over = true;
+      this.success = true;
+    } else if (this.options.lossCondition && this.objectives.evaluate(this.world, this.options.lossCondition)) {
+      this.over = true;
+      this.success = false;
+    }
+  }
+  world;
+  systems;
+  actions;
+  objectives;
+  options;
+  events = [];
+  worldFrames = [];
+  over = false;
+  success = false;
+  runAction(action) {
+    if (this.over) {
+      return { status: "interrupted", events: [] };
+    }
+    const startCtx = { world: this.world, frame: this.world.frame };
+    const started = this.actions.start(startCtx, action);
+    let actionState = started.state;
+    if (!actionState || actionState.status === "failed") {
+      return {
+        status: "failed",
+        events: started.events,
+        failureReason: actionState?.failureReason
+      };
+    }
+    if (actionState.status === "done") {
+      this.worldFrames.push(captureWorldFrame(this.world, this.world.frame, started.events));
+      this.events.push(...started.events);
+      return { status: "done", events: started.events };
+    }
+    const actionEvents = [];
+    let pendingFrameEvents = [...started.events];
+    const maxFrames = this.options.maxFrames ?? 2e3;
+    while (actionState && actionState.status === "running" && !this.over) {
+      const frameEvents = [...pendingFrameEvents];
+      pendingFrameEvents = [];
+      const tickCtx = { world: this.world, frame: this.world.frame };
+      const systemEvents = this.systems.runTick(this.world);
+      frameEvents.push(...systemEvents);
+      const tickResult = this.actions.tick(tickCtx, actionState);
+      actionState = tickResult.state;
+      frameEvents.push(...tickResult.events);
+      this.worldFrames.push(captureWorldFrame(this.world, this.world.frame, frameEvents));
+      this.events.push(...frameEvents);
+      actionEvents.push(...frameEvents);
+      if (this.options.winCondition && this.objectives.evaluate(this.world, this.options.winCondition)) {
+        this.over = true;
+        this.success = true;
+      } else if (this.options.lossCondition && this.objectives.evaluate(this.world, this.options.lossCondition)) {
+        this.over = true;
+        this.success = false;
+      }
+      this.world.frame++;
+      if (!this.over && this.world.frame >= maxFrames) {
+        this.over = true;
+        this.success = false;
+      }
+    }
+    if (!actionState || actionState.status === "running") {
+      return { status: "interrupted", events: actionEvents };
+    }
+    return {
+      status: actionState.status,
+      events: actionEvents,
+      failureReason: actionState.failureReason
+    };
+  }
+  isOver() {
+    return this.over;
+  }
+  result() {
+    return {
+      success: this.success,
+      frames: this.world.frame,
+      events: this.events,
+      worldFrames: this.worldFrames
+    };
+  }
+};
 export {
   ACTION_ATTACK,
   ACTION_CAST,
@@ -1189,6 +1310,7 @@ export {
   AttackHandler,
   DEFAULT_MAX_FRAMES,
   FrameDriver,
+  LiveWorldSession,
   MoveDirectionHandler,
   MovementSystem,
   MultiFrameActionRunner,

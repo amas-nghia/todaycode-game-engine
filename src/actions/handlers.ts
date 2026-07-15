@@ -1,16 +1,44 @@
 import { Action, ActionContext, ValidationResult } from '../actions';
-import { MultiFrameActionHandler, MultiFrameActionStepResult } from '../multi-frame-action';
+import { MultiFrameActionHandler, MultiFrameActionState, MultiFrameActionStepResult } from '../multi-frame-action';
 import { getComponent, setComponent, hasComponent } from '../entity';
 import { PositionComponent, MovementComponent, MotionComponent, CombatComponent, HealthComponent, CollectibleComponent, InventoryComponent } from '../components';
 import { isPositionInBounds, isSegmentClear, distance } from '../physics';
 import { GameEvent } from '../events';
 
-export class MoveDirectionHandler implements MultiFrameActionHandler<{ direction: 'up' | 'down' | 'left' | 'right' }> {
+export type MoveDirectionPayload = {
+  direction: 'up' | 'down' | 'left' | 'right';
+  distance?: number;
+};
+
+type MoveDirectionLocalState = {
+  blocked?: boolean;
+  target: { x: number; y: number };
+  blockedTo?: { x: number; y: number };
+  reason?: string;
+};
+
+function movePoint(
+  position: { x: number; y: number },
+  direction: MoveDirectionPayload['direction'],
+  distanceToMove: number
+) {
+  const target = { x: position.x, y: position.y };
+
+  if (direction === 'up') target.y += distanceToMove;
+  else if (direction === 'down') target.y -= distanceToMove;
+  else if (direction === 'left') target.x -= distanceToMove;
+  else if (direction === 'right') target.x += distanceToMove;
+
+  return target;
+}
+
+export class MoveDirectionHandler implements MultiFrameActionHandler<MoveDirectionPayload, MoveDirectionLocalState> {
   type = 'MOVE_DIRECTION';
 
-  validate(ctx: ActionContext, action: Action<{ direction: 'up' | 'down' | 'left' | 'right' }>): ValidationResult {
+  validate(ctx: ActionContext, action: Action<MoveDirectionPayload>): ValidationResult {
     const actor = ctx.world.entities[action.actorId];
     if (!actor) return { valid: false, reason: 'Actor not found' };
+    if (!action.payload) return { valid: false, reason: 'Missing move payload' };
     
     const pos = getComponent<PositionComponent>(actor, 'position');
     if (!pos) return { valid: false, reason: 'Actor has no position' };
@@ -18,29 +46,48 @@ export class MoveDirectionHandler implements MultiFrameActionHandler<{ direction
     const mov = getComponent<MovementComponent>(actor, 'movement');
     if (!mov) return { valid: false, reason: 'Actor has no movement component' };
 
+    if (action.payload?.distance !== undefined && action.payload.distance <= 0) {
+      return { valid: false, reason: 'Distance must be > 0' };
+    }
+
     return { valid: true };
   }
 
-  start(ctx: ActionContext, action: Action<{ direction: 'up' | 'down' | 'left' | 'right' }>) {
+  start(ctx: ActionContext, action: Action<MoveDirectionPayload>) {
     const actor = ctx.world.entities[action.actorId];
     const pos = getComponent<PositionComponent>(actor, 'position')!;
     const mov = getComponent<MovementComponent>(actor, 'movement')!;
     
-    const target = { x: pos.x, y: pos.y };
     const dir = action.payload!.direction;
-    
-    if (dir === 'up') target.y += mov.stepDistance;
-    else if (dir === 'down') target.y -= mov.stepDistance;
-    else if (dir === 'left') target.x -= mov.stepDistance;
-    else if (dir === 'right') target.x += mov.stepDistance;
+    let remainingDistance = action.payload!.distance ?? mov.stepDistance;
+    const actorRadius = actor.components.collision ? (actor.components.collision as any).radius : 0;
 
-    if (!isPositionInBounds(ctx.world, target)) {
-      return { localState: { blocked: true, target, reason: 'Target out of bounds' } };
+    let target = { x: pos.x, y: pos.y };
+    let blockedTo: { x: number; y: number } | undefined;
+    let blockedReason: string | undefined;
+
+    while (remainingDistance > 0) {
+      const segmentDistance = Math.min(mov.stepDistance, remainingDistance);
+      const nextTarget = movePoint(target, dir, segmentDistance);
+
+      if (!isPositionInBounds(ctx.world, nextTarget)) {
+        blockedTo = nextTarget;
+        blockedReason = 'Target out of bounds';
+        break;
+      }
+
+      if (!isSegmentClear(ctx.world, target, nextTarget, action.actorId, actorRadius)) {
+        blockedTo = nextTarget;
+        blockedReason = 'Path blocked';
+        break;
+      }
+
+      target = nextTarget;
+      remainingDistance -= segmentDistance;
     }
 
-    const actorRadius = actor.components.collision ? (actor.components.collision as any).radius : 0;
-    if (!isSegmentClear(ctx.world, pos, target, action.actorId, actorRadius)) {
-      return { localState: { blocked: true, target, reason: 'Path blocked' } };
+    if (target.x === pos.x && target.y === pos.y && blockedTo) {
+      return { localState: { blocked: true, target: blockedTo, blockedTo, reason: blockedReason } };
     }
 
     setComponent(actor, 'motion', {
@@ -49,13 +96,21 @@ export class MoveDirectionHandler implements MultiFrameActionHandler<{ direction
       remainingDistance: distance(pos, target)
     } as MotionComponent);
 
-    return { localState: { target } };
+    return {
+      localState: blockedTo
+        ? { blocked: true, target, blockedTo, reason: blockedReason }
+        : { target }
+    };
   }
 
-  step(ctx: ActionContext, state: any): MultiFrameActionStepResult {
-    if (state.localState?.blocked) {
-      const actor = ctx.world.entities[state.action.actorId];
-      const pos = getComponent<PositionComponent>(actor, 'position')!;
+  step(
+    ctx: ActionContext,
+    state: MultiFrameActionState<MoveDirectionPayload, MoveDirectionLocalState>
+  ): MultiFrameActionStepResult<MoveDirectionLocalState> {
+    const actor = ctx.world.entities[state.action.actorId];
+
+    if (state.localState?.blocked && (!actor || !hasComponent(actor, 'motion'))) {
+      const pos = actor ? getComponent<PositionComponent>(actor, 'position') : undefined;
 
       return {
         status: 'done',
@@ -63,19 +118,18 @@ export class MoveDirectionHandler implements MultiFrameActionHandler<{ direction
           type: 'move_blocked',
           frame: ctx.frame,
           actorId: state.action.actorId,
-          from: { x: pos.x, y: pos.y },
-          to: state.localState.target,
+          from: pos ? { x: pos.x, y: pos.y } : { x: 0, y: 0 },
+          to: state.localState.blockedTo ?? state.localState.target,
         }],
       };
     }
 
-    const actor = ctx.world.entities[state.action.actorId];
     // If motion component was removed (by MovementSystem), we're done
-    if (!hasComponent(actor, 'motion')) {
+    if (!actor || !hasComponent(actor, 'motion')) {
       return { status: 'done', events: [] };
     }
 
-    return { status: 'running', events: [] };
+    return { status: 'running', events: [], localState: state.localState };
   }
 }
 

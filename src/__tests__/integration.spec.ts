@@ -95,6 +95,107 @@ describe('integration', () => {
     expect((world.entities['hero'].components.position as any).x).toBe(5);
   });
 
+  it('moves a custom distance in one continuous MOVE_DIRECTION action', () => {
+    const world = createWorld(123, 0);
+    world.bounds = { minX: 0, maxX: 100, minY: 0, maxY: 100 };
+
+    addEntity(world, {
+      id: 'hero',
+      kind: 'hero',
+      components: {
+        position: { x: 4, y: 5 },
+        movement: { speed: 1, stepDistance: 4 },
+        collision: { radius: 0.5 }
+      }
+    });
+
+    const systems = new SystemRunner();
+    systems.addSystem(new MovementSystem());
+
+    const actions = new MultiFrameActionRunner();
+    actions.registerHandler(new MoveDirectionHandler());
+
+    function* heroPlan(): PlanIterator {
+      yield {
+        type: 'MOVE_DIRECTION',
+        actorId: 'hero',
+        payload: { direction: 'right', distance: 12 }
+      };
+    }
+
+    const runner = new YieldPlanRunner(actions, heroPlan());
+    const objectives = new ObjectiveSystem();
+    const worldRunner = new WorldRunner(world, systems, actions, objectives, runner, {
+      maxFrames: 100,
+      winCondition: {
+        type: 'reach_position',
+        actorId: 'hero',
+        position: { x: 16, y: 5 },
+        radius: 0.1
+      }
+    });
+
+    const result = worldRunner.run();
+
+    expect(result.success).toBe(true);
+    expect((world.entities['hero'].components.position as any)).toEqual({ x: 16, y: 5 });
+    expect(result.worldFrames.filter((frame) =>
+      frame.events.some((event: any) => event.subtype === 'move_finished')
+    )).toHaveLength(1);
+  });
+
+  it('keeps partial progress when a custom distance hits a blocked segment', () => {
+    const world = createWorld(123, 0);
+    world.bounds = { minX: 0, maxX: 20, minY: 0, maxY: 15 };
+
+    addEntity(world, {
+      id: 'hero',
+      kind: 'hero',
+      components: {
+        position: { x: 4, y: 4 },
+        movement: { speed: 1, stepDistance: 4 },
+        collision: { radius: 0.5 }
+      }
+    });
+
+    const systems = new SystemRunner();
+    systems.addSystem(new MovementSystem());
+
+    const actions = new MultiFrameActionRunner();
+    actions.registerHandler(new MoveDirectionHandler());
+
+    function* heroPlan(): PlanIterator {
+      yield { type: 'MOVE_DIRECTION', actorId: 'hero', payload: { direction: 'up', distance: 12 } };
+      yield { type: 'MOVE_DIRECTION', actorId: 'hero', payload: { direction: 'right', distance: 8 } };
+      yield { type: 'MOVE_DIRECTION', actorId: 'hero', payload: { direction: 'down', distance: 12 } };
+    }
+
+    const runner = new YieldPlanRunner(actions, heroPlan());
+    const objectives = new ObjectiveSystem();
+    const worldRunner = new WorldRunner(world, systems, actions, objectives, runner, {
+      maxFrames: 100
+    });
+
+    const result = worldRunner.run();
+    const moveBlockedEvents = result.events.filter((event) => event.type === 'move_blocked') as any[];
+    const stopPositions = result.worldFrames
+      .flatMap((frame) => frame.events)
+      .filter((event: any) => event.type === 'custom' && event.subtype === 'move_finished')
+      .map((event: any) => event.payload.position);
+
+    expect((world.entities['hero'].components.position as any)).toEqual({ x: 12, y: 0 });
+    expect(moveBlockedEvents).toHaveLength(1);
+    expect(moveBlockedEvents[0]).toMatchObject({
+      from: { x: 4, y: 12 },
+      to: { x: 4, y: 16 }
+    });
+    expect(stopPositions).toEqual([
+      { x: 4, y: 12 },
+      { x: 12, y: 12 },
+      { x: 12, y: 0 }
+    ]);
+  });
+
   it('handles PICK_UP and ATTACK actions in a complex scenario', () => {
     const world = createWorld(123, 0);
     world.bounds = { minX: 0, maxX: 100, minY: 0, maxY: 100 };

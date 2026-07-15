@@ -374,7 +374,7 @@ interface Replay {
     levelVersion: number;
     seed: number;
     frameCount: number;
-    frames: FrameEvents[];
+    frames?: FrameEvents[];
     worldFrames?: WorldFrame[];
     outcome: Outcome;
     schemaVersion?: number;
@@ -691,35 +691,48 @@ declare class MovementSystem implements System {
     tick(world: WorldState): GameEvent[];
 }
 
-declare class MoveDirectionHandler implements MultiFrameActionHandler<{
+type MoveDirectionPayload = {
     direction: 'up' | 'down' | 'left' | 'right';
-}> {
+    distance?: number;
+};
+type MoveDirectionLocalState = {
+    blocked?: boolean;
+    target: {
+        x: number;
+        y: number;
+    };
+    blockedTo?: {
+        x: number;
+        y: number;
+    };
+    reason?: string;
+};
+declare class MoveDirectionHandler implements MultiFrameActionHandler<MoveDirectionPayload, MoveDirectionLocalState> {
     type: string;
-    validate(ctx: ActionContext, action: Action<{
-        direction: 'up' | 'down' | 'left' | 'right';
-    }>): ValidationResult;
-    start(ctx: ActionContext, action: Action<{
-        direction: 'up' | 'down' | 'left' | 'right';
-    }>): {
+    validate(ctx: ActionContext, action: Action<MoveDirectionPayload>): ValidationResult;
+    start(ctx: ActionContext, action: Action<MoveDirectionPayload>): {
         localState: {
             blocked: boolean;
             target: {
                 x: number;
                 y: number;
             };
-            reason: string;
-        };
-    } | {
-        localState: {
+            blockedTo: {
+                x: number;
+                y: number;
+            };
+            reason: string | undefined;
+        } | {
             target: {
                 x: number;
                 y: number;
             };
             blocked?: undefined;
+            blockedTo?: undefined;
             reason?: undefined;
         };
     };
-    step(ctx: ActionContext, state: any): MultiFrameActionStepResult;
+    step(ctx: ActionContext, state: MultiFrameActionState<MoveDirectionPayload, MoveDirectionLocalState>): MultiFrameActionStepResult<MoveDirectionLocalState>;
 }
 declare class WaitHandler implements MultiFrameActionHandler<{
     frames: number;
@@ -801,4 +814,31 @@ declare class WorldRunner {
     run(): WorldRunnerResult;
 }
 
-export { ACTION_ATTACK, ACTION_CAST, ACTION_MOVE, ACTION_PICK_UP, ACTION_SAY, ACTION_WAIT, type Action, type ActionContext, type ActionEngine, type ActionHandler, type ActionResult, ActionRunner, type AttackEvent, AttackHandler, type BaseEvent, type BlockingComponent, type CollectibleComponent, type CollisionComponent, type CombatComponent, type Commander, type ComponentMap, type ComponentType, type CooldownComponent, type CustomEvent, DEFAULT_MAX_FRAMES, type DamageEvent, type DeathEvent, type Engine, type Entity, type EntityId, type Event, FrameDriver, type FrameDriverOption, type FrameEvents, type GameEvent, type Grader, type HealthComponent, type InventoryComponent, type LevelDef, type LevelValidator, type LogEvent, type MotionComponent, type MoveBlockedEvent, MoveDirectionHandler, type MoveEvent, type MovementComponent, MovementSystem, type MultiFrameActionHandler, MultiFrameActionRunner, type MultiFrameActionState, type MultiFrameActionStatus, type MultiFrameActionStepResult, type MultiFrameActionTickResult, type ObjectiveCompletedEvent, type ObjectiveCondition, type ObjectiveEvaluator, ObjectiveSystem, type ObjectiveTargetComponent, type Order, type Outcome, PickUpHandler, type PickupEvent, type PlanIterator, PlanRunner, type PlanRunnerOptions, type PlanRunnerState, type PlanRunnerTickResult, type PlanStep, type PlanYield, type PositionComponent, type ProgrammableComponent, RNG, type Replay, type ReplayMetadata, type ScoreEvent, type Solvable, type State, type System, SystemRunner, type TeamComponent, UNIT, type ValidationResult, type Vec2, WaitHandler, type WorldBounds, type WorldEngine, type WorldFrame, WorldRunner, type WorldRunnerOptions, type WorldRunnerResult, type WorldState, YieldPlanRunner, type YieldPlanRunnerState, type YieldPlanRunnerTickResult, add, addEntity, buildReplay, captureWorldFrame, createWorld, distance, findNearest, getBlockingEntities, getComponent, getEntity, hasComponent, isInBounds, isOccupied, isPathClear, isPositionInBounds, isSegmentClear, isqrt, len, len2, moveToward, removeComponent, removeEntity, scale, setComponent, sub, tile, toOutcomeJSON, toReplayJSON, updateEntity, visibleEntities, withComponent, withDecisionInterval, withMaxFrames, withoutComponent };
+interface LiveWorldSessionOptions {
+    maxFrames?: number;
+    winCondition?: ObjectiveCondition;
+    lossCondition?: ObjectiveCondition;
+}
+type LiveActionStatus = 'done' | 'failed' | 'interrupted';
+interface LiveActionResult {
+    status: LiveActionStatus;
+    events: GameEvent[];
+    failureReason?: string;
+}
+declare class LiveWorldSession {
+    world: WorldState;
+    systems: SystemRunner;
+    actions: MultiFrameActionRunner;
+    objectives: ObjectiveSystem;
+    private options;
+    private events;
+    private worldFrames;
+    private over;
+    private success;
+    constructor(world: WorldState, systems: SystemRunner, actions: MultiFrameActionRunner, objectives: ObjectiveSystem, options?: LiveWorldSessionOptions);
+    runAction(action: Action): LiveActionResult;
+    isOver(): boolean;
+    result(): WorldRunnerResult;
+}
+
+export { ACTION_ATTACK, ACTION_CAST, ACTION_MOVE, ACTION_PICK_UP, ACTION_SAY, ACTION_WAIT, type Action, type ActionContext, type ActionEngine, type ActionHandler, type ActionResult, ActionRunner, type AttackEvent, AttackHandler, type BaseEvent, type BlockingComponent, type CollectibleComponent, type CollisionComponent, type CombatComponent, type Commander, type ComponentMap, type ComponentType, type CooldownComponent, type CustomEvent, DEFAULT_MAX_FRAMES, type DamageEvent, type DeathEvent, type Engine, type Entity, type EntityId, type Event, FrameDriver, type FrameDriverOption, type FrameEvents, type GameEvent, type Grader, type HealthComponent, type InventoryComponent, type LevelDef, type LevelValidator, type LiveActionResult, type LiveActionStatus, LiveWorldSession, type LiveWorldSessionOptions, type LogEvent, type MotionComponent, type MoveBlockedEvent, MoveDirectionHandler, type MoveDirectionPayload, type MoveEvent, type MovementComponent, MovementSystem, type MultiFrameActionHandler, MultiFrameActionRunner, type MultiFrameActionState, type MultiFrameActionStatus, type MultiFrameActionStepResult, type MultiFrameActionTickResult, type ObjectiveCompletedEvent, type ObjectiveCondition, type ObjectiveEvaluator, ObjectiveSystem, type ObjectiveTargetComponent, type Order, type Outcome, PickUpHandler, type PickupEvent, type PlanIterator, PlanRunner, type PlanRunnerOptions, type PlanRunnerState, type PlanRunnerTickResult, type PlanStep, type PlanYield, type PositionComponent, type ProgrammableComponent, RNG, type Replay, type ReplayMetadata, type ScoreEvent, type Solvable, type State, type System, SystemRunner, type TeamComponent, UNIT, type ValidationResult, type Vec2, WaitHandler, type WorldBounds, type WorldEngine, type WorldFrame, WorldRunner, type WorldRunnerOptions, type WorldRunnerResult, type WorldState, YieldPlanRunner, type YieldPlanRunnerState, type YieldPlanRunnerTickResult, add, addEntity, buildReplay, captureWorldFrame, createWorld, distance, findNearest, getBlockingEntities, getComponent, getEntity, hasComponent, isInBounds, isOccupied, isPathClear, isPositionInBounds, isSegmentClear, isqrt, len, len2, moveToward, removeComponent, removeEntity, scale, setComponent, sub, tile, toOutcomeJSON, toReplayJSON, updateEntity, visibleEntities, withComponent, withDecisionInterval, withMaxFrames, withoutComponent };
