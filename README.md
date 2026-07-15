@@ -1,89 +1,138 @@
 # todaycode-game-engine
 
-## What it is
+**Repo này không chạy game nào — nó là bộ tiêu chuẩn mà mọi game phải khớp vào.**
+Ví như chuẩn ổ cắm điện: bóng đèn (farmwars), quạt (missions) do rulebook khác
+sản xuất; dòng điện (code bot/học sinh) do app bơm vào; nhờ chung chuẩn mà cắm
+ở đâu (browser hay server) cũng ra kết quả y hệt nhau.
 
-A game-agnostic, deterministic engine base: the `Engine` contract, `FrameDriver`,
-a seeded splitmix64 `RNG`, integer-only `vec2` math, a `Replay`/`Outcome`
-envelope, and `LevelDef`. Ported from a Go reference implementation
-(`pkg/gamecore`), so any turn-based game can implement the same contract
-without reinventing the loop, the RNG, or the replay wire format.
+## Bạn là dev mới? Đọc theo thứ tự này
 
-**This repo contains no game and never will.** It has no knowledge of Farm
-Wars, missions, or any other specific ruleset — only the shape every such
-ruleset plugs into.
+1. README này — hiểu contract và vì sao mọi thứ phải deterministic (10 phút).
+2. [`src/gamecore.interface.ts`](src/gamecore.interface.ts) — toàn bộ contract chỉ ~70 dòng, đọc thẳng code.
+3. [todaycode-farmwars](https://github.com/amas-nghia/todaycode-farmwars) — **bản implement mẫu sống**: một game thật cắm vào contract này thế nào.
+4. Cách app tiêu thụ: `CodeClash-fe/src/features/codeclash/farm-wars/simulator/match-simulator.ts` (browser) và `todaycode-be/apps/arena-service/src/simulator/simulator.ts` (server).
 
-| File | What it gives you |
-|---|---|
-| `gamecore.interface.ts` | The `Engine` contract every game implements: `name`, `version`, `init`, `applyOrders`, `tick`, `isOver`, `result`. Also `Commander` (an agent's decision-maker), `Outcome`, `Grader`, `Solvable`. |
-| `frame-driver.ts` | `FrameDriver` — a generic turn loop: visit each commander in numeric agent-id order, collect orders, apply them, tick the engine, collect events, repeat until `isOver()`. Produces a `Replay`. Synchronous by design — real async bot matches (spawning a process, awaiting stdout, per-turn timeouts) hand-roll their own version of this loop in the consuming app. |
-| `replay.ts` | `Replay` / `FrameEvents` / `toReplayJSON` / `toOutcomeJSON` — the wire envelope, with `omitempty`-style serialization matching the Go original exactly (empty `scores`/`metrics` are omitted; a zero-value entry inside a non-empty map is kept). |
-| `rng.ts` | `RNG` — seeded splitmix64. Returns `bigint` (raw outputs routinely exceed `Number.MAX_SAFE_INTEGER`); replicates Go's `uint64` wraparound bit-for-bit, including negative-seed reinterpretation. |
-| `vec2.ts` | Integer-only vector math. `UNIT`-based milli-units instead of floats; `Math.trunc` (not `Math.floor`) everywhere division was ported from Go, to match Go's toward-zero truncation for negative operands. |
-| `level.ts` | `LevelDef` — a generic level/scenario definition (`slug`, `version`, `gameSlug`, opaque `definition`/`grading` payloads). |
+## CodeCombat-style Programmable World Kernel
 
-## Determinism guarantee
+The `todaycode-game-engine` now includes a generic **programmable world kernel** to support CodeCombat-style games and simulations.
 
-Every file in this repo must stay pure:
+**Important**: This core does *not* contain any game-specific logic (e.g., FarmWars tree planting or Missions wizard story). It solely provides standard primitives:
+- `WorldState`, `Entity`, `Component` for data structures.
+- `Action`, `ActionRunner` for defining and applying moves sequentially.
+- `MultiFrameActionRunner` for actions that occupy multiple simulation frames (move over time, attack wind-up, pickup delay).
+- `PlanRunner` and `YieldPlanRunner` for CodeCombat-style sequential plans: run one action until it finishes, then continue with the next queued or yielded action.
+- `System`, `SystemRunner` for game loop phases (`preAction`, `tick`, etc.).
+- Generic `selectors` (`findNearest`, `isPathClear`) and `objectives` (`all`, `defeat_all`, `metric_comparison`).
 
-- No DB, network, or filesystem access.
-- No wall-clock reads (`Date.now()`, `performance.now()`, timers).
-- No process/container spawning — untrusted bot code never runs in here, only
-  inside a consumer's own sandbox/runner layer.
-- The only randomness source is the seeded `RNG` in `rng.ts` — never
-  `Math.random()`.
+The programmable world kernel uses continuous coordinates with JavaScript `number`
+positions/speeds/distances. Determinism here means pure, ordered simulation under
+the supported JS runtime used by both frontend and backend; rulebooks that need
+integer/fixed-point math can still opt into `vec2`.
 
-Given the same `(engineVersion, levelVersion, seed, inputs)`, an engine built
-on this base **must** produce identical `events[]` and `outcome` — on a
-server, in a browser tab, doesn't matter. That's the whole point: it's safe
-to run the literal same code in both places.
+**Migration Path for FarmWars/Missions:**
+1. **Missions**: Update first. Adapt the existing `MissionState` to wrap or map directly to `WorldState`. Delegate commands to the `ActionRunner` and use the generic `selectors` to replace ad-hoc queries.
+2. **FarmWars**: Migrate next. It can continue using the old `Engine` interface while under the hood it builds upon the new primitives (e.g., `components.ts` and `systems.ts`) to avoid duplicate engine-building.
 
-## Install & use
 
-Install as a **git dependency**, pinned to a semver tag — no npm registry
-involved:
+## Cung cấp gì — cho ai
 
-```json
-{
-  "dependencies": {
-    "todaycode-game-engine": "github:amas-nghia/todaycode-game-engine#v0.2.0"
-  }
-}
-```
+| Thứ | Làm gì | Ai đang dùng thật |
+|---|---|---|
+| **`Engine` contract** | 5 hàm mọi game phải có: `init / applyOrders / tick / isOver / result`. Hạ tầng chạy được *mọi* game mà không biết luật bên trong. | `FarmWarsEngine`, `MissionsEngine` implement; BE arena-service gọi generic |
+| **`Replay` wire format** (`replay.ts`) | JSON chuẩn của một trận: `frames[].events` + `outcome`. Khớp bản Go cũ bit-for-bit. | BE lưu Postgres (`toReplayJSON`); FE trang watch phát lại |
+| **`LevelDef`** (`level.ts`) | Phong bì chở màn/trận: `slug, version, definition, grading`. `definition` là payload tự do — config động farmwars, map missions đều đi qua đây. | BE build level mỗi trận; missions mỗi màn |
+| **`RNG`** (`rng.ts`) | Random có seed (splitmix64, khớp Go). Nguồn ngẫu nhiên hợp lệ duy nhất. | Rulebook nào cần random |
+| **`FrameDriver`** | Vòng lặp mẫu: orders → tick → events → Replay. | Không ai gọi trực tiếp — đúng thiết kế: trận bot async tự viết loop theo mẫu (FE `match-simulator`, BE `simulator.ts`) |
+| **`vec2`** | Toán vector fixed-point theo milli-unit cho rulebook cần số nguyên. World kernel mới vẫn có thể dùng JS `number` cho tọa độ continuous. | Rulebook cần fixed-point math |
+
+## Dùng thế nào — game tối giản trong 40 dòng
+
+Ví dụ đầy đủ vòng đời: game "đua xúc xắc" (2 người tung xúc xắc seeded, ai tới 20
+điểm trước thì thắng). Đây vừa là cách *dùng* FrameDriver, vừa là khung *implement*
+một Engine:
 
 ```ts
-import { FrameDriver, RNG } from 'todaycode-game-engine'
+import { FrameDriver, RNG, type Engine, type Commander, type LevelDef } from 'todaycode-game-engine'
+
+type S = { rng: RNG; scores: [number, number]; over: boolean }
+
+const diceRace: Engine = {
+  name: () => 'dice-race',
+  version: () => '1.0.0',
+  init: (_level, seed) => ({ rng: new RNG(seed), scores: [0, 0], over: false } as S),
+  applyOrders: (state, agentId, orders) => {
+    const s = state as S
+    if (orders[0] === 'roll') s.scores[agentId] += Number((s.rng.next() % 6n) + 1n)
+    return s
+  },
+  tick: (state, _frame) => {
+    const s = state as S
+    s.over = s.scores.some((x) => x >= 20)
+    return { state: s, events: [{ type: 'scores', values: [...s.scores] }] }
+  },
+  isOver: (state) => (state as S).over,
+  result: (state) => {
+    const s = state as S
+    return { over: true, winner: s.scores[0] >= 20 ? 0 : 1 }
+  },
+}
+
+const alwaysRoll: Commander = { decide: () => ['roll'] }
+const level: LevelDef = { slug: 'demo', version: 1, gameSlug: 'dice-race', definition: {} }
+
+const driver = new FrameDriver(diceRace, [alwaysRoll, alwaysRoll])
+const replay = driver.run(level, /* seed */ 42)
+console.log(replay.outcome)        // { over: true, winner: ... } — mọi máy ra y hệt
+console.log(replay.frames.length)  // số frame + events từng frame để client vẽ lại
 ```
 
-Both ESM (`import`) and CommonJS (`require`) resolve correctly.
+Chạy cùng seed 42 ở browser, server, CI — `outcome` và `events` giống nhau từng byte.
+Đó là toàn bộ "phép màu" của repo này.
 
-## Building a game on this engine
+> Lưu ý: `FrameDriver` synchronous — đủ cho game/test đơn giản. Trận bot thật
+> (chờ Pyodide worker / process, timeout mỗi lượt) thì copy vòng lặp của nó và
+> thêm `await` — xem `match-simulator.ts` của FE làm mẫu.
 
-1. Implement the Engine contract (init / applyOrders / tick / isOver / result)
-   in YOUR app's own repository. This engine repo is never edited to add a game.
-2. Your implementation inherits the purity rules above — pure rules code only;
-   bot execution, I/O, and rendering live in your app's own layers.
-3. Placement rule: a game is declared where it computes.
-   - Computes in ONE app (a learning mode, a future web game): declare it inside
-     that app's repo. Example: CodeClash-fe's mission simulator.
-   - Computes in TWO OR MORE places (client preview + server authority): hoist
-     the rulebook into its own small shared package that every computing app
-     imports, so the rules are written exactly once.
-     Reference implementation: [todaycode-farmwars](https://github.com/amas-nghia/todaycode-farmwars).
-4. Version your game with semver git tags; consumers pin a tag and upgrade
-   deliberately. Commit `dist/` with every src change (git-dep distribution).
+## Implement game thật — checklist
 
-## Development
+1. **Tạo repo riêng** (không bao giờ thêm game vào repo này). Copy skeleton từ
+   todaycode-farmwars: `package.json` (exports ESM/CJS, tsup, jest), `tsconfig`,
+   `.github/workflows/publish.yml`.
+2. **Định nghĩa 4 loại dữ liệu trước, luật sau**: `State` (ảnh chụp ván đấu),
+   `Order` (một lệnh), `Event` (một điều đã xảy ra — client vẽ từ đây),
+   schema cho `LevelDef.definition`.
+3. **Implement 5 hàm** của `Engine`. Đọc config/map từ `level.definition` trong
+   `init` — đừng hardcode, sẽ muốn đổi số mà không release lại (xem farmwars
+   `resolveConfig`).
+4. **Tuân thủ hiến pháp determinism** (dưới) — vi phạm là replay vỡ và FE/BE lệch nhau.
+5. **Test bắt buộc**: golden fixture (level + seed + orders → events/outcome kỳ vọng,
+   chạy 2 lần so deep-equal) + 1 lần chạy với key-order xáo trộn.
+6. **Release**: `pnpm build` → **commit cả `dist/`** → tag `v0.x.0` → CI publish
+   GitHub Packages → consumer bump tag chủ động.
+
+## Hiến pháp determinism
+
+Cam kết: cùng `(engineVersion, levelVersion, seed, inputs)` → cùng `events[]` +
+`outcome` trong runtime JS được support ở FE/BE. Vì replay phải phát lại được mãi mãi,
+và client–server lệch nhau nghĩa là bug hoặc gian lận.
+
+- ❌ Không I/O (DB/network/fs), không đọc đồng hồ, không spawn process.
+- ❌ Không `Math.random()` — chỉ `RNG` có seed. Continuous-space được dùng JS `number`, nhưng update phải pure, theo thứ tự cố định, và có test repeated-run.
+- ❌ Không phụ thuộc thứ tự duyệt `Map`/object — vòng lặp theo thứ tự cố định.
+- Code bot/học sinh **không bao giờ** chạy trong engine — chỉ trong sandbox của app.
+
+## Cài & phát triển
+
+```json
+"todaycode-game-engine": "npm:@amas-nghia/todaycode-game-engine@^0.2.1"
+```
+
+Cần `GITHUB_TOKEN` (scope `read:packages`) trong env + `.npmrc` scope
+`@amas-nghia` → `npm.pkg.github.com`.
 
 ```bash
-pnpm install
-pnpm test     # jest — every spec in src/__tests__
-pnpm build    # tsup — emits dist/index.{js,cjs,d.ts,d.cts}
-pnpm lint     # tsc --noEmit
+pnpm install && pnpm test && pnpm build && pnpm lint
 ```
 
-`dist/` is committed to this repo (not gitignored). This is deliberate: since
-consumers install via a plain git dependency rather than a real npm registry,
-there's no separate "publish" step that builds on their behalf — what's
-checked in at a given tag *is* what they get. **Run `pnpm build` and commit
-the result as part of any change to `src`**, or a consumer bumping to a new
-tag will receive stale compiled output.
+**`dist/` được commit** — mọi thay đổi `src` phải kèm `pnpm build` + commit dist
+rồi tag mới, quên là consumer bump tag nhận code biên dịch cũ (đã gây bug thật).

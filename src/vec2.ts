@@ -1,6 +1,7 @@
 /**
- * Fixed-point 2D vector math in milli-units. Never use floats in simulation
- * state — see libs/gamecore/README.md for the full determinism rationale.
+ * Fixed-point 2D vector math in milli-units. This is available for rulebooks
+ * that need integer math; the newer continuous-space world kernel may use
+ * JavaScript numbers for position and physics state.
  *
  * Every function here returns a NEW Vec2 and never mutates its inputs, per
  * this repo's immutability convention.

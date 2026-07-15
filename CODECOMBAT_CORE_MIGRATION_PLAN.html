@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TodayCode Game Engine - CodeCombat-style Core Migration Plan</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --paper: #fff;
+      --ink: #172033;
+      --muted: #5c677d;
+      --line: #d9dfeb;
+      --accent: #2457d6;
+      --green: #0f8a7a;
+      --orange: #a85b00;
+      --red: #b42318;
+      --code-bg: #eef2f8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 "Segoe UI", Arial, sans-serif;
+    }
+    main { max-width: 1180px; margin: 0 auto; padding: 34px 24px 72px; }
+    .hero, section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 24px;
+      margin-top: 18px;
+      box-shadow: 0 14px 34px rgba(23, 32, 51, .05);
+    }
+    .hero { margin-top: 0; padding: 28px; }
+    h1, h2, h3 { line-height: 1.2; margin: 0 0 12px; }
+    h1 { font-size: 30px; letter-spacing: -.01em; }
+    h2 { font-size: 22px; margin-top: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+    h3 { font-size: 17px; margin-top: 22px; color: #24324f; }
+    p { margin: 0 0 12px; }
+    ul, ol { margin-top: 8px; padding-left: 22px; }
+    li { margin: 7px 0; }
+    code {
+      color: #101827;
+      background: var(--code-bg);
+      padding: 1px 5px;
+      border-radius: 5px;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: .93em;
+    }
+    pre {
+      overflow-x: auto;
+      background: #101827;
+      color: #e8eefc;
+      padding: 14px 16px;
+      border-radius: 8px;
+      border: 1px solid #25324a;
+      font-size: 13px;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0 20px; font-size: 14px; }
+    th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+    th { background: #f2f5fa; color: #24324f; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .subtitle { color: var(--muted); max-width: 900px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    .pill {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: #fbfcff;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .toc a {
+      display: block;
+      padding: 10px 12px;
+      background: #f3f6fb;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .note, .warn, .danger, .ok {
+      border-left: 4px solid var(--accent);
+      background: #f4f7ff;
+      padding: 12px 14px;
+      border-radius: 8px;
+      margin: 14px 0;
+    }
+    .warn { border-left-color: var(--orange); background: #fff7ed; }
+    .danger { border-left-color: var(--red); background: #fff1f0; }
+    .ok { border-left-color: var(--green); background: #eefaf7; }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+    .card { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: #fbfcff; }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 800;
+      color: #fff;
+      background: var(--accent);
+      margin-right: 6px;
+    }
+    .tag.green { background: var(--green); }
+    .tag.orange { background: var(--orange); }
+    .tag.red { background: var(--red); }
+    @media print {
+      body { background: #fff; }
+      main { max-width: none; padding: 0; }
+      .hero, section { box-shadow: none; break-inside: avoid; }
+      .toc { display: none; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <div class="hero">
+    <h1>TodayCode Game Engine - CodeCombat-style Core Migration Plan</h1>
+    <p class="subtitle">
+      Ke hoach chi tiet de nang <code>todaycode-game-engine</code> thanh core world/action/stateful simulation theo tinh than CodeCombat, sau do refactor <code>todaycode-farmwars</code> va <code>todaycode-missions</code> dua tren core moi. Tai lieu nay duoc viet nhu handoff doc cho team khac co the tiep tuc thuc hien.
+    </p>
+    <div class="meta">
+      <span class="pill">Target repo: todaycode-game-engine</span>
+      <span class="pill">Dependent repos: todaycode-farmwars, todaycode-missions</span>
+      <span class="pill">Current date: 2026-07-14</span>
+      <span class="pill">Goal: deterministic programmable game kernel</span>
+    </div>
+    <div class="toc">
+      <a href="#summary">1. Tom tat dinh huong</a>
+      <a href="#current-state">2. Hien trang</a>
+      <a href="#target-architecture">3. Core moi</a>
+      <a href="#engine-changes">4. Cap nhat game-engine</a>
+      <a href="#farmwars-plan">5. Refactor FarmWars</a>
+      <a href="#missions-plan">6. Refactor Missions</a>
+      <a href="#testing-plan">7. Ke hoach test</a>
+      <a href="#roadmap">8. Roadmap</a>
+      <a href="#handoff">9. Checklist ban giao</a>
+    </div>
+  </div>
+
+  <section id="summary">
+    <h2>1. Tom tat dinh huong</h2>
+    <p>
+      Muc tieu khong phai copy CodeCombat nguyen xi. Muc tieu la dua <code>todaycode-game-engine</code> tu mot contract mong thanh mot <strong>programmable world kernel</strong>: world co entity song, action co validate/apply, query API doc state that, event/replay du de render, grading/objective doc state cuoi.
+    </p>
+    <div class="ok">
+      <strong>Dinh huong dung:</strong> core khong chua FarmWars hay Missions rule. Core chi cung cap primitives va lifecycle chung. FarmWars va Missions la rulebook/domain packages implement tren primitives do.
+    </div>
+    <table>
+      <thead><tr><th>Package</th><th>Vai tro sau migration</th><th>Khong nen lam</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>todaycode-game-engine</code></td>
+          <td>Kernel: Engine contract, World, Entity, Component, Action, System, Selectors, Replay, Objective/Grading primitives, deterministic utilities.</td>
+          <td>Khong them game-specific logic nhu FarmWars tree/gift hay Missions wizard story.</td>
+        </tr>
+        <tr>
+          <td><code>todaycode-farmwars</code></td>
+          <td>Arena rulebook: actor/tree/gift/base/scoring/combat/debuff/respawn, bot wire protocol, replay reducer.</td>
+          <td>Khong tu tao lai world/action/event primitives neu core da co.</td>
+        </tr>
+        <tr>
+          <td><code>todaycode-missions</code></td>
+          <td>CodeCombat-like campaign rulebook: wizard, enemies, items, barriers, API selectors, objective/win conditions.</td>
+          <td>Khong tiep tuc command-log thuan tuy; API phai doc state da validate.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="current-state">
+    <h2>2. Hien trang 3 package</h2>
+    <h3>2.1 todaycode-game-engine</h3>
+    <ul>
+      <li>Dang co <code>Engine</code>, <code>Commander</code>, <code>Grader</code>, <code>Solvable</code> trong <code>src/gamecore.interface.ts</code>.</li>
+      <li><code>FrameDriver</code> dieu phoi commander theo frame, apply orders, tick engine, gom replay frame events.</li>
+      <li><code>Replay</code> hien chi la envelope voi opaque <code>events</code>.</li>
+      <li><code>LevelDef</code> co <code>definition: unknown</code>, <code>grading: unknown</code>.</li>
+    </ul>
+    <div class="warn">
+      <strong>Van de:</strong> core hien chua co khai niem world/entity/action/system/query API. Vi vay FarmWars va Missions moi package dang tu dinh nghia state/action/tick rieng, dan den duplicate pattern va kho hop nhat.
+    </div>
+
+    <h3>2.2 todaycode-farmwars</h3>
+    <ul>
+      <li><code>src/farmwars.engine.ts</code> implement <code>Engine</code> truc tiep.</li>
+      <li><code>src/state.ts</code> co Team, Actor, Tree, GiftBox, cooldown, stats, respawn, debuff.</li>
+      <li><code>src/tick.ts</code> gom nhieu system trong mot file: movement, attack, harvest, collision, gift, scoring, respawn, debuff.</li>
+      <li><code>src/events.ts</code> co event domain tot nhung mot so event thieu metadata cho replay hoan hao, vi du targeted_attack khong co hpAfter.</li>
+    </ul>
+
+    <h3>2.3 todaycode-missions</h3>
+    <ul>
+      <li><code>src/missions.engine.ts</code> implement <code>Engine</code>, init wizard/enemy/item/barrier tu level definition.</li>
+      <li><code>src/orders.ts</code> co <code>MOVE</code>, <code>ATTACK</code>, <code>PICK_UP</code>, <code>META</code>.</li>
+      <li><code>src/tick.ts</code> da co stateful movement, attack, pickup.</li>
+      <li><code>src/selectors.ts</code> co <code>findNearestEnemy</code>, <code>isPathClear</code>, <code>wizardView</code>.</li>
+      <li><code>src/win-conditions.ts</code> moi implement mot phan conditions.</li>
+    </ul>
+    <div class="ok">
+      <strong>Diem tot:</strong> Missions da gan voi core kieu CodeCombat hon FE hien tai: enemy hp that, attack tru mau, pickup xoa item, selectors doc state. Nen lay Missions lam proof dau tien cho core moi.
+    </div>
+  </section>
+
+  <section id="target-architecture">
+    <h2>3. Kien truc muc tieu cua core moi</h2>
+    <p>Core moi nen giu contract cu de backward-compatible, dong thoi them lop API moi. Domain packages co the migrate dan dan: adapter truoc, refactor sau.</p>
+
+    <h3>3.1 World State</h3>
+    <pre><code>export type EntityId = string;
+export type ComponentType = string;
+
+export interface Entity {
+  id: EntityId;
+  kind: string;
+  components: Record&lt;ComponentType, unknown&gt;;
+}
+
+export interface WorldState {
+  frame: number;
+  seed: number;
+  rngState?: unknown;
+  entities: Record&lt;EntityId, Entity&gt;;
+  order: EntityId[];
+  metrics: Record&lt;string, number&gt;;
+  tags?: Record&lt;string, EntityId[]&gt;;
+  level?: unknown;
+}</code></pre>
+    <p><code>order</code> quan trong de tranh bug Map/object iteration khong on dinh. Moi system lap entity theo <code>order</code> hoac order so ro rang.</p>
+
+    <h3>3.2 Component primitives</h3>
+    <table>
+      <thead><tr><th>Component</th><th>Fields goi y</th><th>Dung cho</th></tr></thead>
+      <tbody>
+        <tr><td><code>position</code></td><td><code>{ x, y, system: 'grid'|'xy' }</code></td><td>Wizard, enemy, FarmWars actor/tree/gift.</td></tr>
+        <tr><td><code>health</code></td><td><code>{ hp, maxHp, alive }</code></td><td>Enemy, actor, tree/barrier co HP.</td></tr>
+        <tr><td><code>team</code></td><td><code>{ id }</code></td><td>FarmWars teams, PvP missions sau nay.</td></tr>
+        <tr><td><code>collision</code></td><td><code>{ blocksMovement, layer }</code></td><td>Wall, barrier, enemy, tree.</td></tr>
+        <tr><td><code>inventory</code></td><td><code>{ gold, gems, mana, carry }</code></td><td>Wizard inventory, harvester carry.</td></tr>
+        <tr><td><code>cooldown</code></td><td><code>{ actions: Record&lt;string, number&gt; }</code></td><td>Attack cooldown, cast cooldown.</td></tr>
+        <tr><td><code>programmable</code></td><td><code>{ agentId, visibleTeam?, apiProfile }</code></td><td>Bot/hero duoc runner dieu khien.</td></tr>
+        <tr><td><code>collectible</code></td><td><code>{ kind, amount }</code></td><td>Gold, gem, mana crystal, gift.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>3.3 Action lifecycle</h3>
+    <pre><code>export interface Action&lt;Payload = unknown&gt; {
+  type: string;
+  actorId: EntityId;
+  payload: Payload;
+  source?: 'runner' | 'system' | 'auto';
+}
+
+export interface ActionHandler&lt;Payload = unknown&gt; {
+  type: string;
+  validate(ctx: ActionContext, action: Action&lt;Payload&gt;): ValidationResult;
+  apply(ctx: ActionContext, action: Action&lt;Payload&gt;): ActionResult;
+}</code></pre>
+    <p>Action chung gom <code>MOVE</code>, <code>ATTACK</code>, <code>PICK_UP</code>, <code>CAST</code>, <code>SAY</code>, <code>WAIT</code>. Domain dang ky action rieng nhu FarmWars <code>GIFT</code>, <code>BASE_SETUP</code>, <code>HARVEST</code>, <code>PLANT_TREE</code>.</p>
+
+    <h3>3.4 System pipeline</h3>
+    <ul>
+      <li><code>MovementSystem</code>: bounds, collision, blocked event.</li>
+      <li><code>CombatSystem</code>: range, damage, hp, death events.</li>
+      <li><code>CollectionSystem</code>: item pickup, inventory, collect events.</li>
+      <li><code>CooldownSystem</code>: decrement cooldown deterministic.</li>
+      <li><code>ObjectiveSystem</code>: evaluate conditions after action/tick.</li>
+      <li><code>ScoringSystem</code>: domain-specific scoring.</li>
+      <li><code>DeathRespawnSystem</code>: FarmWars respawn/debuff/death flow.</li>
+    </ul>
+
+    <h3>3.5 Selectors va programmable API</h3>
+    <p>CodeCombat-like API phai doc tu state that sau moi action hop le. Core can co selectors game-agnostic, domain wrap thanh API hoc sinh.</p>
+    <pre><code>findNearest(world, actorId, filter)
+isPathClear(world, actorId, direction)
+distanceBetween(world, a, b)
+visibleEntities(world, actorId)
+entityView(world, entityId, viewProfile)</code></pre>
+  </section>
+
+  <section id="engine-changes">
+    <h2>4. Cap nhat todaycode-game-engine</h2>
+    <h3>4.1 Files moi can them</h3>
+    <table>
+      <thead><tr><th>File</th><th>Noi dung</th><th>Do uu tien</th></tr></thead>
+      <tbody>
+        <tr><td><code>src/entity.ts</code></td><td><code>EntityId</code>, <code>Entity</code>, helper get/set component, clone/update deterministic.</td><td>P0</td></tr>
+        <tr><td><code>src/world.ts</code></td><td><code>WorldState</code>, createWorld, add/remove/update entity, deterministic order.</td><td>P0</td></tr>
+        <tr><td><code>src/components.ts</code></td><td>Component type definitions: position, health, team, collision, inventory, cooldown, programmable, collectible.</td><td>P0</td></tr>
+        <tr><td><code>src/events.ts</code></td><td>Base <code>GameEvent</code> schema: move, blocked, attack, damage, death, pickup, score, objective, log, custom.</td><td>P0</td></tr>
+        <tr><td><code>src/actions.ts</code></td><td><code>Action</code>, <code>ActionHandler</code>, validation/apply result, standard action payloads.</td><td>P0</td></tr>
+        <tr><td><code>src/action-runner.ts</code></td><td>Execute list actions sequentially, stop/continue policy, event collection.</td><td>P0</td></tr>
+        <tr><td><code>src/selectors.ts</code></td><td>distance, nearest, inBounds, occupancy/collision, path clear, visible view helpers.</td><td>P0</td></tr>
+        <tr><td><code>src/systems.ts</code></td><td>System interface, phase pipeline, deterministic system runner.</td><td>P1</td></tr>
+        <tr><td><code>src/objectives.ts</code></td><td>Generic objective condition schema and evaluator helpers.</td><td>P1</td></tr>
+        <tr><td><code>src/replay-v2.ts</code></td><td>Replay metadata: keyframe, config snapshot, event schema version, custom domain payload.</td><td>P1</td></tr>
+      </tbody>
+    </table>
+
+    <h3>4.2 Files hien co can cap nhat</h3>
+    <ul>
+      <li><code>src/index.ts</code>: export tat ca modules moi.</li>
+      <li><code>src/gamecore.interface.ts</code>: giu interface cu, them optional capability <code>WorldEngine</code> / <code>ActionEngine</code> thay vi sua breaking ngay.</li>
+      <li><code>src/replay.ts</code>: giu <code>Replay</code> cu, them optional fields backward-compatible: <code>schemaVersion?</code>, <code>keyframe?</code>, <code>config?</code>, <code>meta?</code>.</li>
+      <li><code>src/frame-driver.ts</code>: khong bat buoc sua ngay; phase sau co the them <code>ActionFrameDriver</code> hoac <code>TurnDriver</code>.</li>
+      <li><code>README.md</code>: them kien truc moi, migration guide, khi nao dung legacy <code>Engine</code> va khi nao dung world/action kernel.</li>
+    </ul>
+
+    <h3>4.3 Public API versioning</h3>
+    <ul>
+      <li>Neu chi them export moi va optional fields: release <code>0.3.0</code>.</li>
+      <li>Neu sua <code>Engine</code> interface bat buoc: release <code>1.0.0</code> hoac <code>0.4.0</code> co migration note ro.</li>
+      <li>Khuyen nghi: phase dau khong break <code>Engine</code>, release <code>0.3.0</code>.</li>
+    </ul>
+  </section>
+
+  <section id="farmwars-plan">
+    <h2>5. Goi y cap nhat todaycode-farmwars dua tren core moi</h2>
+    <h3>5.1 Muc tieu</h3>
+    <p>FarmWars khong can bien thanh CodeCombat campaign. No la arena rulebook. Migration can giup no dung chung world/action/event primitives, giam duplicate, va replay chinh xac hon.</p>
+
+    <h3>5.2 Mapping state hien tai sang component</h3>
+    <table>
+      <thead><tr><th>FarmWars hien tai</th><th>Core moi</th><th>Ghi chu</th></tr></thead>
+      <tbody>
+        <tr><td><code>Actor</code></td><td>Entity kind <code>actor</code> + position/team/health/cooldown/inventory/role components</td><td>role = planter/harvester/worm.</td></tr>
+        <tr><td><code>Tree</code></td><td>Entity kind <code>tree</code> + position/team/health/growth/fruits/collision</td><td>Tree co HP va fruits, can health component.</td></tr>
+        <tr><td><code>GiftBox</code></td><td>Entity kind <code>gift</code> + position/collectible/spawnedTurn</td><td>Gift pickup thanh collection/action system.</td></tr>
+        <tr><td><code>TeamState.bases</code></td><td>Entity kind <code>base</code> hoac world domain data</td><td>Nen la entity neu FE can render/replay diff.</td></tr>
+        <tr><td><code>score</code></td><td>world metrics + team score component</td><td>Outcome doc tu metrics/scores.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>5.3 Files can cap nhat</h3>
+    <table>
+      <thead><tr><th>File</th><th>Viec can lam</th><th>Phase</th></tr></thead>
+      <tbody>
+        <tr><td><code>src/state.ts</code></td><td>Them adapter <code>toWorldState</code>/<code>fromWorldState</code> truoc; sau do chuyen dan state native sang WorldState.</td><td>P1-P2</td></tr>
+        <tr><td><code>src/initial-state.ts</code></td><td>Tao entities theo core components thay vi object arrays rieng, hoac tao song song trong adapter.</td><td>P1</td></tr>
+        <tr><td><code>src/orders.ts</code></td><td>Parse raw bot lines thanh core <code>Action[]</code>: MOVE/WAIT/ATTACK/GIFT/BASE_SETUP.</td><td>P1</td></tr>
+        <tr><td><code>src/tick.ts</code></td><td>Split thanh systems: movement, targeted attack, auto harvest/plant, collision, gifts, scoring, respawn/debuff.</td><td>P2</td></tr>
+        <tr><td><code>src/combat.ts</code></td><td>Dua damage/range/death vao CombatSystem domain extension.</td><td>P2</td></tr>
+        <tr><td><code>src/events.ts</code></td><td>Extend events voi base metadata: <code>actorId</code>, <code>targetId</code>, <code>hpBefore</code>, <code>hpAfter</code>, <code>reason</code>.</td><td>P1</td></tr>
+        <tr><td><code>src/replay.ts</code></td><td>Doc event metadata moi thay vi doan HP. Giu backward compatibility voi replay cu.</td><td>P2</td></tr>
+        <tr><td><code>src/farmwars.engine.ts</code></td><td>Giữ <code>Engine</code> public contract, ben trong chay pipeline world/action/systems.</td><td>P2</td></tr>
+        <tr><td><code>src/wire.ts</code></td><td>Serialize visible state tu core selectors, khong expose hidden/opponent info sai.</td><td>P2</td></tr>
+      </tbody>
+    </table>
+
+    <h3>5.4 Ranh gioi khong nen doi ngay</h3>
+    <ul>
+      <li>Khong doi bot protocol Python ngay neu khong can. Raw lines van parse thanh actions.</li>
+      <li>Khong doi scoring behavior trong cung phase voi core migration. Can golden test de bao toan.</li>
+      <li>Khong xoa replay reducer cu cho den khi FE da doc replay v2.</li>
+    </ul>
+  </section>
+
+  <section id="missions-plan">
+    <h2>6. Goi y cap nhat todaycode-missions dua tren core moi</h2>
+    <h3>6.1 Ly do Missions nen migrate truoc</h3>
+    <p>Missions gan voi CodeCombat nhat: wizard, enemy, item, barrier, goal, API selectors. No la proof tot de validate core moi truoc khi dung cho FarmWars phuc tap hon.</p>
+
+    <h3>6.2 Mapping Missions sang core</h3>
+    <table>
+      <thead><tr><th>Missions hien tai</th><th>Core moi</th><th>Ghi chu</th></tr></thead>
+      <tbody>
+        <tr><td><code>wizard</code></td><td>Entity <code>wizard</code> + position/health/inventory/mana/programmable</td><td>AgentId = 1 cho single-player.</td></tr>
+        <tr><td><code>enemies[]</code></td><td>Entities kind <code>enemy</code> + position/health/combat/collision</td><td><code>findNearestEnemy</code> chi tra enemy alive.</td></tr>
+        <tr><td><code>items[]</code></td><td>Entities kind <code>item</code> + position/collectible</td><td>Pickup xoa/mark collected.</td></tr>
+        <tr><td><code>barriers[]</code></td><td>Entities kind <code>barrier</code> + position/collision/breakable</td><td>CAST co the break barrier.</td></tr>
+        <tr><td><code>goal</code></td><td>Entity kind <code>goal</code> + objectiveTarget</td><td>ObjectiveSystem doc target.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>6.3 Files can cap nhat</h3>
+    <table>
+      <thead><tr><th>File</th><th>Viec can lam</th><th>Phase</th></tr></thead>
+      <tbody>
+        <tr><td><code>src/state.ts</code></td><td>Chuyen <code>MissionState</code> sang wrapper quanh <code>WorldState</code> hoac adapter hai chieu.</td><td>P1</td></tr>
+        <tr><td><code>src/missions.engine.ts</code></td><td><code>init</code> tao world entities; <code>applyOrders</code> enqueue actions; <code>tick</code> chay action runner + objective system.</td><td>P1</td></tr>
+        <tr><td><code>src/orders.ts</code></td><td>Mo rong order: CAST, SAY, MOVE_TO, INTERACT, META elapsed/statementCount.</td><td>P1-P2</td></tr>
+        <tr><td><code>src/tick.ts</code></td><td>Giam logic manual; delegate MOVE/ATTACK/PICK_UP/CAST/SAY cho core action handlers.</td><td>P1</td></tr>
+        <tr><td><code>src/selectors.ts</code></td><td>Wrap core selectors: findNearestEnemy, isPathClear, distanceTo, wizardView.</td><td>P1</td></tr>
+        <tr><td><code>src/win-conditions.ts</code></td><td>Implement du conditions con thieu bang ObjectiveSystem/evaluator, khong throw cho conditions da khai bao trong schema.</td><td>P2</td></tr>
+        <tr><td><code>src/events.ts</code></td><td>Chuan hoa event names sang base event hoac map tu base event sang domain event cho FE.</td><td>P1</td></tr>
+        <tr><td><code>src/level-schema.ts</code></td><td>Bo sung IDs on dinh cho entities, validate wall/entity overlap, goal, spawn in bounds, duplicate id.</td><td>P1</td></tr>
+      </tbody>
+    </table>
+
+    <h3>6.4 API runner can bam vao core</h3>
+    <p>Runner Python/JS khong nen chi emit command roi cuoi cung moi simulate. Với Missions, can interleaved action/query flow neu muon giong CodeCombat:</p>
+    <ol>
+      <li>User code goi <code>wizard.move_right()</code>.</li>
+      <li>Runtime gui action <code>MOVE</code> sang engine host.</li>
+      <li>Engine validate/apply action, update world.</li>
+      <li>Runtime tiep tuc; neu user goi <code>find_nearest_enemy()</code>, query doc world da update.</li>
+      <li>Stop khi code ket thuc, win, fail, timeout, hoac max actions.</li>
+    </ol>
+    <div class="warn">
+      <strong>Migration thuc te:</strong> neu interleaved runner qua lon, phase dau co the van batch actions nhung phai chuyen query APIs sang state chinh xac nhat co the. Phase sau moi lam host bridge interleaved.
+    </div>
+  </section>
+
+  <section id="testing-plan">
+    <h2>7. Ke hoach test lai</h2>
+    <h3>7.1 todaycode-game-engine tests</h3>
+    <table>
+      <thead><tr><th>Nhom test</th><th>Noi dung</th><th>Bat buoc</th></tr></thead>
+      <tbody>
+        <tr><td>World entity</td><td>add/update/remove entity, order deterministic, component get/set clone khong mutate sai.</td><td>Yes</td></tr>
+        <tr><td>Selectors</td><td>nearest tie-break by id/order, distance integer, path clear with bounds/walls/collision.</td><td>Yes</td></tr>
+        <tr><td>Action runner</td><td>MOVE success/block, ATTACK range/death, PICK_UP inventory, invalid action emits failure event.</td><td>Yes</td></tr>
+        <tr><td>Systems</td><td>Pipeline order deterministic, events stable, no Map iteration drift.</td><td>Yes</td></tr>
+        <tr><td>Replay</td><td>toReplayJSON backward compatible; replay v2 includes keyframe/config/meta only when provided.</td><td>Yes</td></tr>
+        <tr><td>Determinism</td><td>Same seed + same actions => deepEqual events/outcome.</td><td>Yes</td></tr>
+      </tbody>
+    </table>
+
+    <h3>7.2 todaycode-missions tests</h3>
+    <ul>
+      <li>Golden fixture: CS1 move right reaches goal.</li>
+      <li>Movement: wall/bounds/enemy/barrier block path.</li>
+      <li>Combat: attack in range damages enemy, death removes/marks enemy, kill_all passes.</li>
+      <li>Target selectors: nearest enemy ignores dead enemies and tie-break deterministic.</li>
+      <li>Pickup: gold/gem/mana changes counters and events.</li>
+      <li>Win conditions: implement test per supported type, especially collect_gold, collect_all_items, cast_at_barrier, say_string, max/min_statements.</li>
+      <li>Runner contract: batch mode current behavior still passes; interleaved mode later adds query-after-move tests.</li>
+    </ul>
+
+    <h3>7.3 todaycode-farmwars tests</h3>
+    <ul>
+      <li>Golden replay parity: existing fixture seed outputs unchanged for current config.</li>
+      <li>Config snapshot: custom config reflected in replay and behavior, not only echoed.</li>
+      <li>Combat event completeness: targeted_attack/combat/tree_damaged/tree_destroy include hpBefore/hpAfter or enough metadata for replay.</li>
+      <li>Bot protocol: existing easy/medium/hard bots still run.</li>
+      <li>Scoring: harvest deposit, worm steal, gift reward unchanged.</li>
+      <li>Concurrency irrelevance: engine pure, no hidden singleton state between matches.</li>
+      <li>Replay reducer: applying replay frames from keyframe reproduces final score/state needed by FE.</li>
+    </ul>
+
+    <h3>7.4 Integration tests across repos</h3>
+    <table>
+      <thead><tr><th>Flow</th><th>Expected</th></tr></thead>
+      <tbody>
+        <tr><td>BE simulator FarmWars full match</td><td>Match completes, replay v2 valid, leaderboard update unaffected.</td></tr>
+        <tr><td>FE replay FarmWars old replay</td><td>Old replay still renders or gets converted by compatibility adapter.</td></tr>
+        <tr><td>FE mission CS1 sample</td><td>Same user code produces same pass/fail/stars on FE and BE engine.</td></tr>
+        <tr><td>Server-side mission simulation</td><td>Running MissionsEngine headless gives identical outcome to client preview.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>7.5 Commands goi y</h3>
+    <pre><code># In todaycode-game-engine
+pnpm test
+pnpm run lint
+pnpm run build
+
+# In todaycode-missions
+pnpm test
+pnpm run lint
+pnpm run build
+
+# In todaycode-farmwars
+pnpm test
+pnpm run lint
+pnpm run build
+
+# In todaycode-be after dependency bump
+pnpm test apps/arena-service/src/simulator/simulator.integration.spec.ts
+pnpm test apps/match-worker/src/match-worker.integration.spec.ts
+pnpm run build</code></pre>
+  </section>
+
+  <section id="roadmap">
+    <h2>8. Roadmap thuc hien</h2>
+    <h3>Phase 0 - Freeze behavior hien tai</h3>
+    <ul>
+      <li>Chay va luu baseline tests cho 3 package.</li>
+      <li>Chot golden fixtures FarmWars va Missions truoc khi refactor.</li>
+      <li>Ghi ro package versions dang dung trong BE/FE.</li>
+    </ul>
+
+    <h3>Phase 1 - Core additive API</h3>
+    <ul>
+      <li>Them world/entity/components/actions/selectors/events vao <code>todaycode-game-engine</code>.</li>
+      <li>Khong sua breaking <code>Engine</code>.</li>
+      <li>Release <code>@amas-nghia/todaycode-game-engine@0.3.0</code>.</li>
+    </ul>
+
+    <h3>Phase 2 - Missions proof</h3>
+    <ul>
+      <li>Bump game-engine dependency trong <code>todaycode-missions</code>.</li>
+      <li>Refactor state/order/tick/selectors theo core primitives.</li>
+      <li>Implement combat/objectives day du cho CS1 Ch.1-Ch.2.</li>
+      <li>Release <code>todaycode-missions@0.2.0</code>.</li>
+    </ul>
+
+    <h3>Phase 3 - FarmWars adapter</h3>
+    <ul>
+      <li>Bump game-engine dependency trong <code>todaycode-farmwars</code>.</li>
+      <li>Them adapter state-to-world, world-to-state hoac migrate native state dan dan.</li>
+      <li>Chuan hoa event metadata cho replay.</li>
+      <li>Giu bot protocol va scoring unchanged.</li>
+      <li>Release <code>todaycode-farmwars@0.4.0</code> hoac version tiep theo.</li>
+    </ul>
+
+    <h3>Phase 4 - Consumers</h3>
+    <ul>
+      <li>Bump dependencies trong <code>todaycode-be</code>.</li>
+      <li>Bump dependencies trong <code>CodeClash-fe</code>.</li>
+      <li>Cap nhat FE replay/mission runner neu replay v2 fields duoc dung.</li>
+      <li>Chay integration/e2e.</li>
+    </ul>
+
+    <h3>Phase 5 - Interleaved runner for Missions</h3>
+    <ul>
+      <li>Thiet ke host bridge cho user code: action/query/action/query.</li>
+      <li>Dam bao timeout/max actions/max statements.</li>
+      <li>Move query APIs sang state da validate hoan toan.</li>
+      <li>Day la phase gan CodeCombat nhat, nen lam sau khi core primitives on dinh.</li>
+    </ul>
+  </section>
+
+  <section id="handoff">
+    <h2>9. Checklist ban giao</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3><span class="tag">Core</span> Definition of Done</h3>
+        <ul>
+          <li>Core co world/entity/component/action/selector/event APIs.</li>
+          <li>Khong import gi tu FarmWars/Missions vao core.</li>
+          <li>Determinism tests pass.</li>
+          <li>Old <code>Engine</code> implementations van compile.</li>
+          <li>README co migration notes.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="tag green">Missions</span> Definition of Done</h3>
+        <ul>
+          <li>CS1 movement/combat/pickup scenarios pass.</li>
+          <li>Selectors doc state that.</li>
+          <li>Win conditions khong throw cho supported schema.</li>
+          <li>Golden fixtures pass on both old-compatible and new core path.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="tag orange">FarmWars</span> Definition of Done</h3>
+        <ul>
+          <li>Existing bot matches pass.</li>
+          <li>Replay final score/state reproduce duoc.</li>
+          <li>Event metadata du de render attack/damage/death.</li>
+          <li>Dynamic config behavior unchanged and tested.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="tag red">Risk</span> Can canh giac</h3>
+        <ul>
+          <li>Breaking package exports lam BE/FE fail build.</li>
+          <li>Iteration order khong deterministic.</li>
+          <li>Replay v2 khong backward-compatible voi replay cu.</li>
+          <li>FarmWars scoring drift trong luc refactor systems.</li>
+          <li>Missions runner batch vs interleaved semantics bi tron lan.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Quyet dinh kien truc nen chot truoc khi code</h3>
+    <ol>
+      <li>Core se release additive <code>0.3.0</code> hay breaking release?</li>
+      <li>WorldState dung entity component generic den muc nao, hay chi cung cap helpers?</li>
+      <li>Replay v2 co bat buoc <code>keyframe</code>/<code>config</code> trong core envelope khong?</li>
+      <li>Missions phase dau van batch actions hay lam interleaved runner ngay?</li>
+      <li>FarmWars co migrate native state sang WorldState hay dung adapter lau dai?</li>
+    </ol>
+
+    <div class="note">
+      <strong>Recommendation:</strong> Lam additive core truoc, migrate Missions truoc, FarmWars sau. Day la duong it rui ro nhat vi Missions nho hon va gan CodeCombat hon; FarmWars co scoring/replay phuc tap nen can golden fixtures bao ve truoc khi tach systems.
+    </div>
+  </section>
+</main>
+</body>
+</html>

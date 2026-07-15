@@ -74,5 +74,27 @@ describe('replay', () => {
       expect(reserialized).not.toHaveProperty('outcome.winner');
       expect(reserialized).not.toHaveProperty('outcome.scores');
     });
+
+    it('includes new optional fields if present', () => {
+      const newReplay: Replay = {
+        engine: 'test-engine',
+        engineVersion: '1.0',
+        levelSlug: 'test-level',
+        levelVersion: 1,
+        seed: 12345,
+        frameCount: 10,
+        frames: [{ frame: 0, events: [] }],
+        outcome: { over: true },
+        schemaVersion: 2,
+        config: { difficulty: 'hard' },
+        meta: { foo: 'bar' }
+      };
+
+      const json = toReplayJSON(newReplay);
+      
+      expect(json.schemaVersion).toBe(2);
+      expect(json.config).toEqual({ difficulty: 'hard' });
+      expect(json.meta).toEqual({ foo: 'bar' });
+    });
   });
 });

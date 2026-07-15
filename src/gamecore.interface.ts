@@ -3,14 +3,18 @@
  *
  * Determinism contract (mirrors the Go package doc):
  *  - Given the same (engineVersion, levelVersion, seed, inputs), an Engine MUST
- *    produce identical events[] and outcome, every time, on every platform.
+ *    produce identical events[] and outcome under the supported JavaScript
+ *    runtime used by the frontend/server simulation layers.
  *  - No wall-clock, no DB access, no I/O, no process/container spawning inside
  *    gamecore or any Engine implementation. Untrusted user code never runs here
  *    — it only runs inside a domain's runner/sandbox.
- *  - All simulation state uses integers (see vec2.ts, UNIT milli-units) —
- *    never floats — and all randomness is drawn from the single seeded RNG
- *    stream (rng.ts), in a fixed, non-Map-iteration order.
+ *  - Continuous-space systems may use JavaScript numbers for positions,
+ *    distances, and speeds. Keep updates pure and ordered, and use the seeded
+ *    RNG stream (rng.ts) for randomness. Rulebooks that need fixed-point math
+ *    can opt into vec2.ts explicitly.
  */
+import type { WorldState } from './world';
+import type { Action } from './actions';
 
 /** Opaque simulation state — engines cast internally, the driver never inspects it. */
 export type State = unknown;
@@ -69,4 +73,18 @@ export interface Grader {
 /** Optional capability: compute (or estimate) the optimal solution for a level. */
 export interface Solvable {
   solve(level: LevelDef): { optimalSteps: number; ok: boolean };
+}
+
+/**
+ * Optional capability: Engine that runs on the new programmable world kernel.
+ */
+export interface WorldEngine extends Engine {
+  getWorldState(state: State): WorldState;
+}
+
+/**
+ * Optional capability: Engine that accepts standard Actions instead of opaque Orders.
+ */
+export interface ActionEngine extends Engine {
+  applyActions(state: State, agentId: number, actions: Action[]): State;
 }

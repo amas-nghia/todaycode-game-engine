@@ -1,10 +1,10 @@
 {
-  "name": "@amas-nghia/todaycode-game-engine",
-  "version": "0.2.1",
+  "name": "@amas.nghia/todaycode-game-engine",
+  "version": "0.2.4",
   "description": "Game-agnostic, deterministic engine base (Engine contract, FrameDriver, seeded RNG, integer vec2, replay envelope). Games implement this contract in their own repos.",
   "license": "UNLICENSED",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
   },
   "type": "module",
   "files": ["dist"],
