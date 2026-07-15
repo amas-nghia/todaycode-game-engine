@@ -35,7 +35,7 @@ export interface ReplayMetadata {
 export function buildReplay(result: WorldRunnerResult, metadata: ReplayMetadata = {}): Replay {
   return {
     engine: metadata.engine || 'todaycode-game-engine',
-    engineVersion: metadata.engineVersion || '0.2.6',
+    engineVersion: metadata.engineVersion || '0.3.0',
     levelSlug: metadata.levelSlug || 'unknown',
     levelVersion: metadata.levelVersion || 1,
     seed: metadata.seed || 0,
