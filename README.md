@@ -64,13 +64,8 @@ plays out smoothly over 12 frames while the plan code stays simple and sequentia
 
 ## Install
 
-The package is published to GitHub Packages. Add an `.npmrc` with a token that
-has the `read:packages` scope:
-
-```
-@amas.nghia:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
+The package is published publicly on [npm](https://www.npmjs.com/package/@amas.nghia/todaycode-game-engine) —
+no registry config or token needed:
 
 ```bash
 pnpm add @amas.nghia/todaycode-game-engine
@@ -318,8 +313,9 @@ pnpm lint      # tsc -b --noEmit
 ```
 
 **`dist/` is committed.** Release flow: edit `src` → `pnpm build` → commit
-`dist/` too → tag `v0.x.y` → CI ([publish.yml](.github/workflows/publish.yml))
-publishes to GitHub Packages. Skipping the build means consumers get stale
-compiled code on the next tag bump (this has caused a real bug before).
+`dist/` too → bump `version` in `package.json` → `npm publish` (goes to the
+public npm registry; `publishConfig.access` is already `public`). Skipping the
+build means consumers get stale compiled code on the next version bump (this
+has caused a real bug before).
 Also keep the default `engineVersion` in `buildReplay`
 ([world-runner.ts](src/world-runner.ts)) in sync with `package.json`.
