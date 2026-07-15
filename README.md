@@ -35,7 +35,87 @@ same result, whether it runs in a browser, on a server, or in CI.
 
 The engine is built on the **Entity–Component–System (ECS)** pattern, with two
 extra layers on top: **Actions/Plans** ("what a character does") and
-**Objectives** ("what counts as winning"). Six concepts, one file each:
+**Objectives** ("what counts as winning").
+
+### New to ECS? A two-minute primer
+
+The classic OOP way to model a game is one class per thing:
+
+```ts
+class Hero  { hp; x; y; move() {...} attack() {...} }
+class Wall  { x; y; }
+class Coin  { x; y; pickUp() {...} }
+```
+
+This falls apart quickly. What about a chest that can be attacked but can't
+move? A ghost that moves but can't be hit? A coin that expires? You end up with
+deep inheritance trees, duplicated logic, and classes full of methods that
+don't apply. ECS solves this by splitting a "game object" into three separate
+ideas:
+
+| | What it holds | What it does NOT hold |
+|---|---|---|
+| **Entity** | Only an identity: an `id`, a `kind` label, and a bag of components. | No methods. No class hierarchy. A hero and a wall are the *same type*. |
+| **Component** | One facet of plain data: `position {x,y}`, `health {current,max}`, `movement {speed}`. | No logic. Just data you can attach or remove at runtime. |
+| **System** | Behavior: a function that runs every frame, scans all entities, and processes the ones that **have the components it cares about**. | No per-entity state. It doesn't know what a "hero" is. |
+
+The mental shift: **what something *is* = which components it carries; what
+*happens* = which systems run.** Three entities, three different component mixes:
+
+```ts
+// A hero: can be somewhere, can walk, takes damage
+{ id: 'hero', kind: 'hero', components: {
+    position: { x: 10, y: 10 },
+    movement: { speed: 1, stepDistance: 5 },
+    health:   { current: 20, max: 20 },
+} }
+
+// A wall: has a place and blocks movement — nothing else
+{ id: 'wall-1', kind: 'wall', components: {
+    position: { x: 15, y: 10 },
+    collision: { radius: 1 },
+    blocking:  { blocksMovement: true },
+} }
+
+// A coin: has a place and can be picked up — it can't move or die
+{ id: 'coin-1', kind: 'coin', components: {
+    position:    { x: 12, y: 10 },
+    collectible: { kind: 'gold' },
+} }
+```
+
+A system then selects by component, never by class. `MovementSystem` is
+literally just:
+
+```
+every frame:
+  for each entity (in fixed order):
+    does it have position + motion + movement?   ← "motion" = a destination someone gave it
+      yes → move it `speed` units toward motion.target
+            arrived? remove the motion component (the move is finished)
+      no  → skip it
+```
+
+It moves heroes, enemies, and arrows with the same 20 lines of code — anything
+carrying those three components. Want a new kind of thing? **Don't write a
+class — compose components**: an attackable chest is `position + health` (no
+`movement`, so it can never walk); a patrolling ghost is `position + movement`
+(no `health` and no `collision`, so it can't be hit and walks through walls).
+
+Why this engine uses ECS specifically:
+
+1. **Composition over inheritance** — every game level is just a list of
+   entity literals like the ones above; new gameplay = new component mixes,
+   no new classes.
+2. **Free serialization** — the whole world is plain JSON data, so snapshotting
+   it every frame (`worldFrames`) and replaying matches later costs nothing.
+3. **Determinism** — behavior lives in systems that iterate one fixed `order`
+   array, so two machines always process entities in the same sequence.
+
+### The six concepts and where they live
+
+On top of raw ECS, the engine adds Actions/Plans and Objectives. Six concepts,
+one file each:
 
 | Concept | What it is | File |
 |---|---|---|
