@@ -19,3 +19,4 @@ export * from './physics';
 export * from './systems/movement';
 export * from './actions/handlers';
 export * from './world-runner';
+export * from './live-world-session';
